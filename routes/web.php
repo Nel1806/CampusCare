@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', [MaintenanceRequestController::class, 'create']);
 Route::get('/user', [MaintenanceRequestController::class, 'create'])->name('request.create');
 Route::post('/requests', [MaintenanceRequestController::class, 'store'])->name('request.store');
+Route::post('/requests/track', [MaintenanceRequestController::class, 'track'])->name('request.track');
 
 Route::get('/admin/login', [AuthController::class, 'create'])->name('admin.login');
 Route::post('/admin/login', [AuthController::class, 'store'])->name('admin.login.store');

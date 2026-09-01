@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\MaintenanceRequestResolved;
 use App\Models\MaintenancePersonnel;
 use App\Models\MaintenanceRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class AdminRequestController extends Controller
 {
@@ -37,6 +39,7 @@ class AdminRequestController extends Controller
 
     public function update(Request $request, MaintenanceRequest $maintenanceRequest)
     {
+        $wasResolved = $maintenanceRequest->status === 'resolved';
         $data = $request->validate([
             'maintenance_personnel_id' => ['nullable', 'exists:maintenance_personnel,id'],
             'status' => ['required', 'in:new,assigned,in_progress,resolved'],
@@ -45,6 +48,15 @@ class AdminRequestController extends Controller
             $data['status'] = 'assigned';
         }
         $maintenanceRequest->update($data);
+
+        if (! $wasResolved && $maintenanceRequest->status === 'resolved' && $maintenanceRequest->requester_email && ! $maintenanceRequest->resolved_email_sent_at) {
+            try {
+                Mail::to($maintenanceRequest->requester_email)->send(new MaintenanceRequestResolved($maintenanceRequest));
+                $maintenanceRequest->updateQuietly(['resolved_email_sent_at' => now()]);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
 
         return back()->with('success', 'Request updated successfully.');
     }

@@ -89,7 +89,7 @@
             <h1>Request details</h1>
 
             <p>
-                Reported {{ $requestItem->created_at->format('F j, Y \a\t g:i A') }}
+                Reported {{ $requestItem->created_at->timezone('Asia/Manila')->format('F j, Y \a\t g:i A') }}
             </p>
         </div>
 

@@ -10,7 +10,7 @@ class PurgeResolvedMaintenanceRequests extends Command
 {
     protected $signature = 'maintenance:purge-resolved';
 
-    protected $description = 'Permanently delete resolved maintenance requests older than 30 days';
+    protected $description = 'Permanently delete resolved maintenance requests older than 10 days';
 
     public function handle(): int
     {
@@ -18,7 +18,7 @@ class PurgeResolvedMaintenanceRequests extends Command
 
         MaintenanceRequest::query()
             ->where('status', 'resolved')
-            ->where('updated_at', '<=', now()->subDays(30))
+            ->where('updated_at', '<=', now()->subDays(10))
             ->eachById(function (MaintenanceRequest $maintenanceRequest) use (&$deleted) {
                 if ($maintenanceRequest->photo_path) {
                     Storage::disk('public')->delete($maintenanceRequest->photo_path);
@@ -28,7 +28,7 @@ class PurgeResolvedMaintenanceRequests extends Command
                 $deleted++;
             });
 
-        $this->info("Deleted {$deleted} resolved maintenance request(s) older than 30 days.");
+        $this->info("Deleted {$deleted} resolved maintenance request(s) older than 10 days.");
 
         return self::SUCCESS;
     }

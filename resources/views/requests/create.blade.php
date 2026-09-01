@@ -80,6 +80,52 @@
         border-radius: 6px;
     }
 
+    .tracking-card {
+        margin-top: 20px;
+        padding: 28px;
+    }
+
+    .tracking-card h2 {
+        margin: 0 0 4px;
+        font-size: 20px;
+    }
+
+    .tracking-card > p {
+        margin: 0 0 17px;
+        color: var(--muted);
+    }
+
+    .tracking-form {
+        display: flex;
+        gap: 10px;
+    }
+
+    .tracking-form input { flex: 1; }
+
+    .tracking-result {
+        margin-top: 18px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+
+    .tracking-result strong { display: block; }
+    .tracking-result p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+    .tracking-status {
+        display: inline-flex;
+        margin-top: 9px;
+        padding: 4px 9px;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: 800;
+    }
+
+    .tracking-pending { background: #eff8ff; color: #175cd3; }
+    .tracking-progress { background: #fffaeb; color: #b54708; }
+    .tracking-resolved { background: #ecfdf3; color: #067647; }
+
     .helper {
         font-size: 12px;
         color: var(--muted);
@@ -102,13 +148,20 @@
             font-size: 29px;
         }
 
-        .report-card {
+        .report-card,
+        .tracking-card {
             padding: 20px;
         }
 
         .report-grid {
             grid-template-columns: 1fr;
         }
+
+        .tracking-form {
+            flex-direction: column;
+        }
+
+        .tracking-form .btn { width: 100%; }
     }
 </style>
 @endpush
@@ -154,6 +207,39 @@
             @csrf
 
             <div class="report-grid">
+                <div class="field">
+                    <label for="requester_name">Name</label>
+
+                    <input
+                        id="requester_name"
+                        name="requester_name"
+                        value="{{ old('requester_name') }}"
+                        placeholder="Your full name"
+                        required
+                    >
+
+                    @error('requester_name')
+                        <p class="error">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="field">
+                    <label for="requester_email">Email address</label>
+
+                    <input
+                        id="requester_email"
+                        name="requester_email"
+                        type="email"
+                        value="{{ old('requester_email') }}"
+                        placeholder="name@gmail.com"
+                        required
+                    >
+
+                    @error('requester_email')
+                        <p class="error">{{ $message }}</p>
+                    @enderror
+                </div>
+
                 <div class="field">
                     <label for="building">Building</label>
 
@@ -238,6 +324,50 @@
         </form>
     </section>
 
+    <section class="card tracking-card">
+        <h2>Request tracking</h2>
+        <p>Enter your Request ID to check the latest status of your maintenance request.</p>
+
+        <form class="tracking-form" method="POST" action="{{ route('request.track') }}">
+            @csrf
+            <input
+                id="reference"
+                name="reference"
+                value=""
+                placeholder="e.g. CC-250101-ABCDE"
+                aria-label="Request ID"
+                required
+            >
+            <button class="btn" type="submit">Track request</button>
+        </form>
+
+        @error('reference')
+            <p class="error">{{ $message }}</p>
+        @enderror
+
+        @if ($trackingSearched)
+            @if ($trackedRequest)
+                @php
+                    $trackingStatus = match ($trackedRequest->status) {
+                        'resolved' => ['Resolved', 'resolved'],
+                        'in_progress' => ['In Progress', 'progress'],
+                        default => ['Pending', 'pending'],
+                    };
+                @endphp
+
+                <div class="tracking-result">
+                    <strong>{{ $trackedRequest->reference }}</strong>
+                    <p>{{ $trackedRequest->building }} · {{ $trackedRequest->room }}</p>
+                    <span class="tracking-status tracking-{{ $trackingStatus[1] }}">{{ $trackingStatus[0] }}</span>
+                </div>
+            @else
+                <div class="tracking-result">
+                    <strong>Request not found</strong>
+                    <p>Please check the Request ID and try again.</p>
+                </div>
+            @endif
+        @endif
+
     <p class="footer-note">
         CampusCare Facility Support &middot;
         <a href="{{ url('/admin') }}">Administrator sign in</a>
@@ -254,5 +384,11 @@
             image.style.display = 'block';
         }
     }
+
+    document.getElementById('reference').addEventListener('input', (event) => {
+        if (!event.target.value.trim()) {
+            window.location.href = '{{ route('request.create') }}';
+        }
+    });
 </script>
 @endsection

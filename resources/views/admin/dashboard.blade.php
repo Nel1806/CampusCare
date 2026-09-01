@@ -187,6 +187,52 @@
         font-weight: 800;
     }
 
+    .request-date {
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+    }
+
+    .request-pagination {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: flex-end;
+        padding: 16px 20px;
+        border-top: 1px solid var(--line);
+    }
+
+    .request-pagination a,
+    .request-pagination span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 34px;
+        min-height: 32px;
+        padding: 0 9px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+    }
+
+    .request-pagination .active {
+        border-color: var(--brand);
+        background: var(--brand);
+        color: #fff;
+    }
+
+    .requests-panel {
+        transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .requests-panel.is-updating {
+        opacity: .72;
+        transform: translateY(3px);
+    }
+
     .request-location {
         display: block;
         margin-top: 2px;
@@ -426,20 +472,20 @@
 
         <div class="dashboard-grid">
             <div>
-                <section class="card">
+                <section class="card requests-panel" id="requests-panel">
                     <div class="panel-heading">
                         <div>
                             <h2>Recent Requests</h2>
                             <span>Latest reports from campus</span>
                         </div>
 
-                        <form method="GET">
+                        <form method="GET" id="status-filter-form">
                             <select
+                                id="status-filter"
                                 name="status"
-                                onchange="this.form.submit()"
                                 aria-label="Filter requests by status"
                             >
-                                <option value="">All statuses</option>
+                                <option value="">All</option>
 
                                 @foreach([
                                     'new'=>'New',
@@ -470,6 +516,7 @@
                         <table>
                             <thead>
                                 <tr>
+                                    <th>Date Submitted</th>
                                     <th>Request ID</th>
                                     <th>Issue</th>
                                     <th>Location</th>
@@ -483,6 +530,10 @@
                             <tbody>
                                 @forelse($requests as $requestItem)
                                     <tr>
+                                        <td class="request-date">
+                                            {{ $requestItem->created_at->timezone('Asia/Manila')->format('M j, Y') }}
+                                        </td>
+
                                         <td class="request-ref">
                                             {{ $requestItem->reference }}
                                         </td>
@@ -504,6 +555,7 @@
                                                     class="request-photo"
                                                     src="{{ asset('storage/'.$requestItem->photo_path) }}"
                                                     alt="Issue photo for {{ $requestItem->reference }}"
+                                                    loading="lazy"
                                                 >
                                             @else
                                                 <span
@@ -537,7 +589,7 @@
                                 @empty
                                     <tr>
                                         <td
-                                            colspan="7"
+                                            colspan="8"
                                             class="muted"
                                             style="padding:38px;text-align:center"
                                         >
@@ -548,6 +600,18 @@
                             </tbody>
                         </table>
                     </div>
+
+                    @if ($requests->hasPages())
+                        <nav class="request-pagination" aria-label="Request table pages">
+                            @for ($page = 1; $page <= $requests->lastPage(); $page++)
+                                @if ($page === $requests->currentPage())
+                                    <span class="active">{{ $page }}</span>
+                                @else
+                                    <a href="{{ $requests->url($page) }}" aria-label="Page {{ $page }}">{{ $page }}</a>
+                                @endif
+                            @endfor
+                        </nav>
+                    @endif
                 </section>
 
                 <section class="card team-panel">
@@ -642,18 +706,74 @@
     </main>
 
     <script>
-        const searchForm = document.getElementById('live-search-form'),
-            searchInput = document.getElementById('live-search');
-
+        const searchForm = document.getElementById('live-search-form');
+        const searchInput = document.getElementById('live-search');
         let searchDelay;
+        let activeRequest;
+
+        const updateRequestTable = async (pageUrl = null) => {
+            const currentPanel = document.getElementById('requests-panel');
+            const filter = document.getElementById('status-filter');
+            const url = pageUrl ? new URL(pageUrl, window.location.origin) : new URL(window.location.href);
+
+            if (!pageUrl) {
+                url.searchParams.set('search', searchInput.value.trim());
+                url.searchParams.set('status', filter.value);
+                url.searchParams.delete('page');
+            }
+
+            if (activeRequest) {
+                activeRequest.abort();
+            }
+
+            activeRequest = new AbortController();
+            currentPanel.classList.add('is-updating');
+
+            try {
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    signal: activeRequest.signal,
+                });
+
+                if (!response.ok) {
+                    throw new Error('Unable to load requests');
+                }
+
+                const documentResponse = new DOMParser().parseFromString(await response.text(), 'text/html');
+                const updatedPanel = documentResponse.getElementById('requests-panel');
+
+                if (updatedPanel) {
+                    currentPanel.innerHTML = updatedPanel.innerHTML;
+                    window.history.replaceState({}, '', url);
+                    requestAnimationFrame(() => currentPanel.classList.remove('is-updating'));
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    currentPanel.classList.remove('is-updating');
+                }
+            }
+        };
+
+        searchForm.addEventListener('submit', (event) => event.preventDefault());
 
         searchInput.addEventListener('input', () => {
             clearTimeout(searchDelay);
+            searchDelay = setTimeout(updateRequestTable, 180);
+        });
 
-            searchDelay = setTimeout(
-                () => searchForm.submit(),
-                350
-            );
+        document.addEventListener('change', (event) => {
+            if (event.target.id === 'status-filter') {
+                updateRequestTable();
+            }
+        });
+
+        document.addEventListener('click', (event) => {
+            const pageLink = event.target.closest('#requests-panel .request-pagination a');
+
+            if (pageLink) {
+                event.preventDefault();
+                updateRequestTable(pageLink.href);
+            }
         });
 
         document.querySelectorAll('[data-duty-form]').forEach((form) => {
