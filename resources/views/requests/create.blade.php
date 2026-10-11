@@ -187,7 +187,7 @@
             <strong>Report submitted.</strong>
             Your reference number is
             <strong>{{ session('success') }}</strong>.
-            The maintenance team has been notified.
+            You can use this number below to track your request.
         </div>
     @endif
 
@@ -289,7 +289,7 @@
             </div>
 
             <div class="field">
-                <label>Photo of the issue</label>
+                <label for="photo">Photo of the issue (optional)</label>
 
                 <div class="upload">
                     <input
@@ -298,7 +298,6 @@
                         name="photo"
                         accept="image/*"
                         capture="environment"
-                        required
                         onchange="previewPhoto(this)"
                     >
 

@@ -12,6 +12,10 @@ class AdminRequestController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', 'in:new,assigned,in_progress,resolved'],
+        ]);
         $query = MaintenanceRequest::query()
             ->select(['id', 'reference', 'room', 'building', 'description', 'photo_path', 'status', 'maintenance_personnel_id', 'created_at'])
             ->with('assignee:id,name')
@@ -44,7 +48,7 @@ class AdminRequestController extends Controller
             'maintenance_personnel_id' => ['nullable', 'exists:maintenance_personnel,id'],
             'status' => ['required', 'in:new,assigned,in_progress,resolved'],
         ]);
-        if ($data['maintenance_personnel_id'] && $data['status'] === 'new') {
+        if (! empty($data['maintenance_personnel_id']) && $data['status'] === 'new') {
             $data['status'] = 'assigned';
         }
         $maintenanceRequest->update($data);

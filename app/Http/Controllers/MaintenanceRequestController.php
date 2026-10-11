@@ -47,10 +47,12 @@ class MaintenanceRequestController extends Controller
             'room' => ['required', 'string', 'max:100'],
             'building' => ['required', 'string', 'max:100'],
             'description' => ['required', 'string', 'max:1500'],
-            'photo' => ['required', 'image', 'max:5120'],
+            'photo' => ['nullable', 'image', 'max:5120'],
         ]);
 
-        $photoPath = $request->file('photo')->store('maintenance-photos', 'public');
+        $photoPath = $request->hasFile('photo')
+            ? $request->file('photo')->store('maintenance-photos', 'public')
+            : null;
         do {
             $reference = 'CC-'.now()->format('ymd').'-'.strtoupper(Str::random(5));
         } while (MaintenanceRequest::where('reference', $reference)->exists());
