@@ -35,4 +35,5 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::delete('/personnel/{personnel}', [PersonnelController::class, 'destroy'])->name('personnel.destroy');
     Route::get('/requests/{maintenanceRequest}', [AdminRequestController::class, 'show'])->name('requests.show');
     Route::patch('/requests/{maintenanceRequest}', [AdminRequestController::class, 'update'])->name('requests.update');
+    Route::delete('/requests/{maintenanceRequest}', [AdminRequestController::class, 'destroy'])->name('requests.destroy');
 });

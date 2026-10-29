@@ -7,6 +7,7 @@ use App\Models\MaintenancePersonnel;
 use App\Models\MaintenanceRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class AdminRequestController extends Controller
 {
@@ -63,5 +64,22 @@ class AdminRequestController extends Controller
         }
 
         return back()->with('success', 'Request updated successfully.');
+    }
+
+    public function destroy(MaintenanceRequest $maintenanceRequest)
+    {
+        if ($maintenanceRequest->status !== 'resolved') {
+            return back()->with('delete_error', "Request {$maintenanceRequest->reference} is not resolved and cannot be deleted.");
+        }
+
+        $reference = $maintenanceRequest->reference;
+        $photoPath = $maintenanceRequest->photo_path;
+        $maintenanceRequest->delete();
+
+        if ($photoPath) {
+            Storage::disk('public')->delete($photoPath);
+        }
+
+        return redirect()->route('admin.dashboard')->with('request_deleted', $reference);
     }
 }

@@ -246,6 +246,99 @@
         font-weight: 800;
     }
 
+    .request-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .request-delete {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--red);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .delete-modal[hidden] { display: none; }
+    .delete-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgb(15 23 42 / 55%);
+        backdrop-filter: blur(3px);
+    }
+    .delete-dialog {
+        width: min(420px, 100%);
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--paper);
+        box-shadow: 0 24px 70px rgb(15 23 42 / 25%);
+        text-align: center;
+        animation: delete-dialog-in .16s ease-out;
+    }
+    @keyframes delete-dialog-in {
+        from { opacity: 0; transform: translateY(8px) scale(.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .delete-dialog-icon {
+        display: grid;
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 16px;
+        place-items: center;
+        border-radius: 50%;
+        background: #fef2f2;
+        color: var(--red);
+        font-size: 25px;
+        font-weight: 800;
+    }
+    .delete-dialog-icon.is-success {
+        background: #ecfdf3;
+        color: #067647;
+    }
+    .delete-dialog h2 { margin: 0; font-size: 20px; }
+    .delete-dialog p { margin: 10px 0 24px; color: var(--muted); line-height: 1.55; }
+    .delete-dialog-reference { color: var(--ink); font-weight: 800; }
+    .delete-dialog-actions { display: flex; justify-content: center; gap: 10px; }
+    .delete-dialog-actions button {
+        min-height: 42px;
+        padding: 0 17px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        color: var(--ink);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .delete-dialog-actions .delete-confirm {
+        border-color: var(--red);
+        background: var(--red);
+        color: #fff;
+    }
+    .delete-dialog-actions .delete-confirm.is-notice {
+        border-color: var(--brand);
+        background: var(--brand);
+    }
+    .dashboard-delete-error {
+        margin: 0 0 18px;
+        padding: 13px 16px;
+        border: 1px solid #fecdca;
+        border-radius: 9px;
+        background: #fef3f2;
+        color: #b42318;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
     .activity {
         display: grid;
         gap: 10px;
@@ -396,6 +489,9 @@
     @include('layouts.admin-header')
 
     <main class="shell dashboard">
+        @if (session('delete_error'))
+            <div class="dashboard-delete-error" role="alert">{{ session('delete_error') }}</div>
+        @endif
         <div class="dashboard-title">
             <div>
                 <h1>Admin Overview</h1>
@@ -578,12 +674,22 @@
                                         </td>
 
                                         <td>
-                                            <a
-                                                class="action-link"
-                                                href="{{ route('admin.requests.show', $requestItem) }}"
-                                            >
-                                                Manage
-                                            </a>
+                                            <div class="request-actions">
+                                                <a
+                                                    class="action-link"
+                                                    href="{{ route('admin.requests.show', $requestItem) }}"
+                                                >
+                                                    Manage
+                                                </a>
+                                                <form
+                                                    method="POST"
+                                                    action="{{ route('admin.requests.destroy', $requestItem) }}"
+                                                >
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="request-delete" type="button" data-delete-request="{{ $requestItem->reference }}" data-request-resolved="{{ $requestItem->status === 'resolved' ? 'true' : 'false' }}">Delete</button>
+                                                </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 @empty
@@ -705,11 +811,99 @@
         </div>
     </main>
 
+    <div class="delete-modal" id="delete-modal" hidden>
+        <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title" aria-describedby="delete-dialog-description">
+            <div class="delete-dialog-icon" aria-hidden="true">!</div>
+            <h2 id="delete-dialog-title">Delete maintenance request?</h2>
+            <p id="delete-dialog-description">Are you sure you want to permanently delete <span class="delete-dialog-reference" id="delete-request-reference"></span>? This action cannot be undone.</p>
+            <div class="delete-dialog-actions">
+                <button type="button" id="delete-cancel">Cancel</button>
+                <button type="button" class="delete-confirm" id="delete-confirm">Yes, delete</button>
+            </div>
+        </section>
+    </div>
+
+    @if (session('request_deleted'))
+        <div class="delete-modal" id="delete-success-modal">
+            <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-success-title" aria-describedby="delete-success-description">
+                <div class="delete-dialog-icon is-success" aria-hidden="true">✓</div>
+                <h2 id="delete-success-title">Request deleted</h2>
+                <p id="delete-success-description">Request <span class="delete-dialog-reference">{{ session('request_deleted') }}</span> was successfully deleted.</p>
+                <div class="delete-dialog-actions">
+                    <button type="button" class="delete-confirm is-notice" id="delete-success-close">Done</button>
+                </div>
+            </section>
+        </div>
+    @endif
+
     <script>
         const searchForm = document.getElementById('live-search-form');
         const searchInput = document.getElementById('live-search');
         let searchDelay;
         let activeRequest;
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteReference = document.getElementById('delete-request-reference');
+        const deleteCancel = document.getElementById('delete-cancel');
+        const deleteConfirm = document.getElementById('delete-confirm');
+        let pendingDeleteForm = null;
+        const deleteSuccessModal = document.getElementById('delete-success-modal');
+
+        if (deleteSuccessModal) {
+            const closeSuccessModal = () => { deleteSuccessModal.hidden = true; };
+            document.getElementById('delete-success-close').addEventListener('click', closeSuccessModal);
+            deleteSuccessModal.addEventListener('click', (event) => {
+                if (event.target === deleteSuccessModal) closeSuccessModal();
+            });
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') closeSuccessModal();
+            });
+            document.getElementById('delete-success-close').focus();
+        }
+
+        const closeDeleteModal = () => {
+            deleteModal.hidden = true;
+            pendingDeleteForm = null;
+        };
+
+        document.addEventListener('click', (event) => {
+            const deleteButton = event.target.closest('[data-delete-request]');
+
+            if (deleteButton) {
+                const isResolved = deleteButton.dataset.requestResolved === 'true';
+                pendingDeleteForm = isResolved ? deleteButton.closest('form') : null;
+                deleteReference.textContent = deleteButton.dataset.deleteRequest;
+                document.getElementById('delete-dialog-title').textContent = isResolved
+                    ? 'Delete maintenance request?'
+                    : 'Request not resolved';
+                document.getElementById('delete-dialog-description').textContent = isResolved
+                    ? `Are you sure you want to permanently delete request ${deleteButton.dataset.deleteRequest}? This action cannot be undone.`
+                    : `Request ${deleteButton.dataset.deleteRequest} cannot be deleted until it is resolved.`;
+                deleteCancel.hidden = !isResolved;
+                deleteConfirm.textContent = isResolved ? 'Yes, delete' : 'Okay';
+                deleteConfirm.classList.toggle('is-notice', !isResolved);
+                deleteModal.hidden = false;
+                (isResolved ? deleteCancel : deleteConfirm).focus();
+                return;
+            }
+
+            if (event.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+
+        deleteCancel.addEventListener('click', closeDeleteModal);
+        deleteConfirm.addEventListener('click', () => {
+            if (pendingDeleteForm) {
+                pendingDeleteForm.submit();
+            } else {
+                closeDeleteModal();
+            }
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && !deleteModal.hidden) {
+                closeDeleteModal();
+            }
+        });
 
         const updateRequestTable = async (pageUrl = null) => {
             const currentPanel = document.getElementById('requests-panel');
