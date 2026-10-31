@@ -540,7 +540,7 @@
         <h2>Request tracking</h2>
         <p>Enter your Request ID to check the latest status of your maintenance request.</p>
 
-        <form class="tracking-form" method="POST" action="{{ route('request.track') }}">
+        <form class="tracking-form" id="request-tracking-form" data-request-tracking-form method="POST" action="{{ route('request.track') }}">
             @csrf
             <input
                 id="reference"
@@ -550,12 +550,13 @@
                 aria-label="Request ID"
                 required
             >
-            <button class="btn" type="submit">Track request</button>
+            <button class="btn" id="track-request-button" type="submit">Track request</button>
         </form>
 
         @error('reference')
             <p class="error">{{ $message }}</p>
         @enderror
+        <p class="error" id="tracking-request-error" role="alert" hidden>We couldn't retrieve your request. Please check your connection and try again.</p>
 
         @if ($trackingSearched)
             @if ($trackedRequest)
@@ -590,6 +591,13 @@
     <div class="submission-loading-card">
         <div class="submission-spinner" aria-hidden="true"></div>
         <p class="submission-loading-message">Submitting your request...</p>
+    </div>
+</div>
+
+<div class="submission-loading" id="tracking-loading" role="status" aria-live="polite" aria-busy="true" hidden>
+    <div class="submission-loading-card">
+        <div class="submission-spinner" aria-hidden="true"></div>
+        <p class="submission-loading-message">Tracking your request...</p>
     </div>
 </div>
 
@@ -674,6 +682,32 @@
         requestSubmitButton.disabled = false;
         requestSubmissionLoading.hidden = true;
         if (requestSubmissionError) requestSubmissionError.hidden = false;
+    });
+
+    const requestTrackingForm = document.getElementById('request-tracking-form');
+    const trackRequestButton = document.getElementById('track-request-button');
+    const trackingLoading = document.getElementById('tracking-loading');
+    const trackingRequestError = document.getElementById('tracking-request-error');
+
+    requestTrackingForm.addEventListener('submit', (event) => {
+        if (requestTrackingForm.dataset.submitting === 'true') {
+            event.preventDefault();
+            return;
+        }
+
+        requestTrackingForm.dataset.submitting = 'true';
+        trackRequestButton.disabled = true;
+        trackingLoading.hidden = false;
+        trackingRequestError.hidden = true;
+    });
+
+    document.addEventListener('campuscare:ajax-form-error', (event) => {
+        if (event.detail?.form !== requestTrackingForm) return;
+
+        requestTrackingForm.dataset.submitting = 'false';
+        trackRequestButton.disabled = false;
+        trackingLoading.hidden = true;
+        trackingRequestError.hidden = false;
     });
 
     const photoChoice = document.getElementById('photo-choice-overlay');

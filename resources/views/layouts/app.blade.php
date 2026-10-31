@@ -655,15 +655,15 @@
 
                 fetch(destination, requestOptions)
                     .then((response) => {
-                        if (!response.ok && form.hasAttribute('data-request-update-form')) {
-                            throw new Error(`Update failed (${response.status}).`);
+                        if (!response.ok && (form.hasAttribute('data-request-update-form') || form.hasAttribute('data-request-tracking-form'))) {
+                            throw new Error(`Form request failed (${response.status}).`);
                         }
                         return renderResponse(response, 'push');
                     })
                     .catch((error) => {
                         if (error.name !== 'AbortError') {
                             document.dispatchEvent(new CustomEvent('campuscare:ajax-form-error', { detail: { form, error } }));
-                            if (form.id !== 'maintenance-request-form' && !form.hasAttribute('data-request-delete-form') && !form.hasAttribute('data-request-update-form')) form.submit();
+                            if (form.id !== 'maintenance-request-form' && !form.hasAttribute('data-request-tracking-form') && !form.hasAttribute('data-request-delete-form') && !form.hasAttribute('data-request-update-form')) form.submit();
                         }
                     });
             });
