@@ -522,6 +522,162 @@
 
     @yield('body')
 
+    <script id="campuscare-ajax-navigation">
+        (() => {
+            if (window.campusCareAjaxNavigationInstalled) return;
+            window.campusCareAjaxNavigationInstalled = true;
+
+            let pageController = new AbortController();
+            let navigationController = null;
+
+            const isNavigableLink = (link, event) => {
+                if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+                if (link.hasAttribute('download') || (link.target && link.target !== '_self')) return false;
+
+                const destination = new URL(link.href, window.location.href);
+                if (destination.origin !== window.location.origin) return false;
+                if (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash) return false;
+
+                return true;
+            };
+
+            const runPageScripts = (parsedPage) => {
+                const originalAddEventListener = EventTarget.prototype.addEventListener;
+                const controller = new AbortController();
+                pageController = controller;
+
+                EventTarget.prototype.addEventListener = function (type, listener, options) {
+                    if (options && typeof options === 'object' && options.signal) {
+                        return originalAddEventListener.call(this, type, listener, options);
+                    }
+
+                    const trackedOptions = typeof options === 'boolean'
+                        ? { capture: options, signal: controller.signal }
+                        : { ...(options || {}), signal: controller.signal };
+
+                    return originalAddEventListener.call(this, type, listener, trackedOptions);
+                };
+
+                try {
+                    parsedPage.querySelectorAll('body script').forEach((sourceScript) => {
+                        if (sourceScript.id === 'campuscare-ajax-navigation') return;
+
+                        if (sourceScript.src) {
+                            const replacement = document.createElement('script');
+                            replacement.src = sourceScript.src;
+                            replacement.type = sourceScript.type;
+                            replacement.async = false;
+                            document.body.appendChild(replacement);
+                            return;
+                        }
+
+                        if (sourceScript.type && sourceScript.type !== 'text/javascript' && sourceScript.type !== 'application/javascript') return;
+                        new Function(sourceScript.textContent)();
+                    });
+                } finally {
+                    EventTarget.prototype.addEventListener = originalAddEventListener;
+                }
+            };
+
+            const renderResponse = async (response, historyMode, restoreScroll = null) => {
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('text/html')) throw new Error('The response is not an HTML page.');
+
+                const html = await response.text();
+                const parsedPage = new DOMParser().parseFromString(html, 'text/html');
+
+                pageController.abort();
+                document.head.innerHTML = parsedPage.head.innerHTML;
+                document.title = parsedPage.title;
+                document.body.innerHTML = parsedPage.body.innerHTML;
+                document.body.className = parsedPage.body.className;
+
+                const destination = new URL(response.url || window.location.href, window.location.href);
+                if (historyMode === 'push') {
+                    history.replaceState({ ...(history.state || {}), scrollY: window.scrollY }, '', window.location.href);
+                    history.pushState({ scrollY: 0 }, '', destination.href);
+                } else if (historyMode === 'replace') {
+                    history.replaceState({ scrollY: 0 }, '', destination.href);
+                }
+
+                runPageScripts(parsedPage);
+                window.scrollTo(0, restoreScroll ?? 0);
+            };
+
+            const navigate = async (url, { historyMode = 'push', restoreScroll = null } = {}) => {
+                if (navigationController) navigationController.abort();
+                navigationController = new AbortController();
+
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+                    signal: navigationController.signal,
+                });
+
+                await renderResponse(response, historyMode, restoreScroll);
+            };
+
+            document.addEventListener('click', (event) => {
+                const link = event.target.closest('a[href]');
+                if (!link || !isNavigableLink(link, event)) return;
+
+                const destination = new URL(link.href, window.location.href);
+                if (destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash === window.location.hash) return;
+
+                event.preventDefault();
+                navigate(destination.href).catch((error) => {
+                    if (error.name !== 'AbortError') window.location.assign(destination.href);
+                });
+            });
+
+            document.addEventListener('submit', (event) => {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement) || event.defaultPrevented || form.target && form.target !== '_self' || form.hasAttribute('data-no-ajax')) return;
+
+                const method = (form.method || 'GET').toUpperCase();
+                const action = new URL(form.action || window.location.href, window.location.href);
+                if (action.origin !== window.location.origin || !['GET', 'POST'].includes(method)) return;
+
+                event.preventDefault();
+                if (navigationController) navigationController.abort();
+                let destination = action;
+                let requestOptions = {
+                    method,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+                    signal: (navigationController = new AbortController()).signal,
+                };
+
+                if (method === 'GET') {
+                    const query = new URLSearchParams(new FormData(form));
+                    query.forEach((value, key) => destination.searchParams.set(key, value));
+                } else {
+                    requestOptions.body = new FormData(form);
+                }
+
+                fetch(destination, requestOptions)
+                    .then((response) => {
+                        if (!response.ok && form.hasAttribute('data-request-update-form')) {
+                            throw new Error(`Update failed (${response.status}).`);
+                        }
+                        return renderResponse(response, 'push');
+                    })
+                    .catch((error) => {
+                        if (error.name !== 'AbortError') {
+                            document.dispatchEvent(new CustomEvent('campuscare:ajax-form-error', { detail: { form, error } }));
+                            if (form.id !== 'maintenance-request-form' && !form.hasAttribute('data-request-delete-form') && !form.hasAttribute('data-request-update-form')) form.submit();
+                        }
+                    });
+            });
+
+            window.addEventListener('popstate', (event) => {
+                navigate(window.location.href, { historyMode: 'none', restoreScroll: event.state?.scrollY ?? 0 })
+                    .catch(() => window.location.reload());
+            });
+
+            window.campusCareNavigate = (url) => navigate(url, { historyMode: 'replace' });
+        })();
+
+    </script>
+
     <script>
         document.querySelectorAll('.alert-success').forEach(alert => setTimeout(() => {
             alert.classList.add('is-hiding');

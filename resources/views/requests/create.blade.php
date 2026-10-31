@@ -41,6 +41,47 @@
         color: var(--muted);
     }
 
+    .submission-loading[hidden] { display: none; }
+    .submission-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgb(15 23 42 / 55%);
+        backdrop-filter: blur(3px);
+    }
+    .submission-loading-card {
+        width: min(330px, 100%);
+        padding: 28px 24px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper);
+        box-shadow: 0 20px 60px rgb(15 23 42 / 22%);
+        text-align: center;
+    }
+    .submission-spinner {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 15px;
+        border: 4px solid color-mix(in srgb, var(--brand) 18%, var(--paper));
+        border-top-color: var(--brand);
+        border-radius: 50%;
+        animation: submission-spin .75s linear infinite;
+    }
+    @keyframes submission-spin { to { transform: rotate(360deg); } }
+    .submission-loading-message { margin: 0; font-weight: 800; }
+    .submission-error {
+        margin: 0 0 16px;
+        padding: 11px 13px;
+        border: 1px solid #fecdca;
+        border-radius: 8px;
+        background: #fef3f2;
+        color: #b42318;
+        font-size: 13px;
+    }
+
     .report-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -164,6 +205,8 @@
         background: #f8fafc;
     }
 
+    .tracking-card .tracking-result { display: none; }
+
     .tracking-result strong { display: block; }
     .tracking-result p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 
@@ -179,6 +222,59 @@
     .tracking-pending { background: #eff8ff; color: #175cd3; }
     .tracking-progress { background: #fffaeb; color: #b54708; }
     .tracking-resolved { background: #ecfdf3; color: #067647; }
+
+    .tracking-overlay[hidden] { display: none; }
+    .tracking-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgb(15 23 42 / 58%);
+        backdrop-filter: blur(4px);
+    }
+
+    .tracking-dialog {
+        width: min(460px, 100%);
+        padding: 32px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--paper);
+        box-shadow: 0 26px 80px rgb(15 23 42 / 28%);
+        text-align: center;
+        animation: confirmation-appear .2s ease-out;
+    }
+
+    .tracking-dialog h2 { margin: 0; font-size: 22px; }
+    .tracking-dialog > p { margin: 9px 0 18px; color: var(--muted); line-height: 1.55; }
+    .tracking-dialog-code {
+        display: block;
+        margin: 0 0 12px;
+        padding: 13px;
+        border: 1px dashed #8bbdb5;
+        border-radius: 10px;
+        background: #f0fdfa;
+        color: #0f766e;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: .7px;
+        overflow-wrap: anywhere;
+    }
+    .tracking-dialog-location { margin: 0 0 10px !important; font-size: 13px; }
+    .tracking-dialog .tracking-status { margin: 0 0 22px; padding: 7px 13px; font-size: 13px; }
+    .tracking-dialog .tracking-not-found { display: inline-flex; margin: 2px 0 22px; padding: 7px 13px; border-radius: 16px; background: #fef3f2; color: #b42318; font-size: 13px; font-weight: 800; }
+    .tracking-dialog-done {
+        min-height: 44px;
+        padding: 0 20px;
+        border: 1px solid #0f766e;
+        border-radius: 8px;
+        background: #0f766e;
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+    }
 
     .submission-overlay {
         position: fixed;
@@ -316,12 +412,17 @@
         </p>
 
         <form
+            id="maintenance-request-form"
             method="POST"
             action="{{ route('request.store') }}"
             enctype="multipart/form-data"
             class="form-stack"
         >
             @csrf
+
+            <div class="submission-error" id="submission-error" role="alert" hidden>
+                We couldn't submit your request. Please check your connection and try again.
+            </div>
 
             <div class="report-grid">
                 <div class="field">
@@ -429,7 +530,7 @@
                 @enderror
             </div>
 
-            <button class="btn" type="submit">
+            <button class="btn" id="request-submit-button" type="submit">
                 Submit maintenance request
             </button>
         </form>
@@ -485,6 +586,13 @@
     </p>
 </main>
 
+<div class="submission-loading" id="submission-loading" role="status" aria-live="polite" aria-busy="true" hidden>
+    <div class="submission-loading-card">
+        <div class="submission-spinner" aria-hidden="true"></div>
+        <p class="submission-loading-message">Submitting your request...</p>
+    </div>
+</div>
+
 <div class="photo-choice-overlay" id="photo-choice-overlay" hidden>
     <section class="photo-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="photo-choice-title" aria-describedby="photo-choice-description">
         <h2 id="photo-choice-title">Add a photo</h2>
@@ -496,6 +604,33 @@
         </div>
     </section>
 </div>
+
+@if ($trackingSearched)
+    <div class="tracking-overlay" id="tracking-overlay">
+        <section class="tracking-dialog" role="dialog" aria-modal="true" aria-labelledby="tracking-dialog-title" aria-describedby="tracking-dialog-description">
+            @if ($trackedRequest)
+                @php
+                    $trackingStatus = match ($trackedRequest->status) {
+                        'resolved' => ['Resolved', 'resolved', 'The reported issue has been resolved.'],
+                        'in_progress' => ['In Progress', 'progress', 'The maintenance team is currently working on this issue.'],
+                        'assigned' => ['Assigned', 'progress', 'This request has been assigned to a maintenance team member.'],
+                        default => ['Pending', 'pending', 'Your request has been received and is waiting for a maintenance team member.'],
+                    };
+                @endphp
+                <h2 id="tracking-dialog-title">Current request status</h2>
+                <p id="tracking-dialog-description">{{ $trackingStatus[2] }}</p>
+                <strong class="tracking-dialog-code">{{ $trackedRequest->reference }}</strong>
+                <p class="tracking-dialog-location">{{ $trackedRequest->building }} &middot; {{ $trackedRequest->room }}</p>
+                <span class="tracking-status tracking-{{ $trackingStatus[1] }}">{{ $trackingStatus[0] }}</span>
+            @else
+                <h2 id="tracking-dialog-title">Request not found</h2>
+                <p id="tracking-dialog-description">We couldn’t find a request with that unique code. Check the code and try again.</p>
+                <span class="tracking-not-found">No matching request</span>
+            @endif
+            <div><button type="button" class="tracking-dialog-done" id="tracking-dialog-done">Done</button></div>
+        </section>
+    </div>
+@endif
 
 @if(session('success'))
     <div class="submission-overlay" id="submission-overlay">
@@ -515,6 +650,32 @@
 @endif
 
 <script>
+    const maintenanceRequestForm = document.getElementById('maintenance-request-form');
+    const requestSubmitButton = document.getElementById('request-submit-button');
+    const requestSubmissionLoading = document.getElementById('submission-loading');
+    const requestSubmissionError = document.getElementById('submission-error');
+
+    maintenanceRequestForm.addEventListener('submit', (event) => {
+        if (maintenanceRequestForm.dataset.submitting === 'true') {
+            event.preventDefault();
+            return;
+        }
+
+        maintenanceRequestForm.dataset.submitting = 'true';
+        requestSubmitButton.disabled = true;
+        requestSubmissionLoading.hidden = false;
+        if (requestSubmissionError) requestSubmissionError.hidden = true;
+    });
+
+    document.addEventListener('campuscare:ajax-form-error', (event) => {
+        if (event.detail?.form !== maintenanceRequestForm) return;
+
+        maintenanceRequestForm.dataset.submitting = 'false';
+        requestSubmitButton.disabled = false;
+        requestSubmissionLoading.hidden = true;
+        if (requestSubmissionError) requestSubmissionError.hidden = false;
+    });
+
     const photoChoice = document.getElementById('photo-choice-overlay');
     const photoChoiceOpen = document.getElementById('photo-choice-open');
     const photoChoiceCancel = document.getElementById('photo-choice-cancel');
@@ -567,11 +728,24 @@
         }
     }
 
-    document.getElementById('reference').addEventListener('input', (event) => {
-        if (!event.target.value.trim()) {
-            window.location.href = '{{ route('request.create') }}';
-        }
-    });
+    const trackingOverlay = document.getElementById('tracking-overlay');
+    if (trackingOverlay) {
+        const closeTrackingDialog = () => {
+            trackingOverlay.hidden = true;
+        };
+        document.getElementById('tracking-dialog-done').addEventListener('click', () => {
+            closeTrackingDialog();
+            document.querySelector('.tracking-form').reset();
+            document.getElementById('reference').focus();
+        });
+        trackingOverlay.addEventListener('click', (event) => {
+            if (event.target === trackingOverlay) closeTrackingDialog();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') closeTrackingDialog();
+        });
+        document.getElementById('tracking-dialog-done').focus();
+    }
 
     const submissionOverlay = document.getElementById('submission-overlay');
     if (submissionOverlay) {

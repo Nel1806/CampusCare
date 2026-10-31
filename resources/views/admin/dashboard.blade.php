@@ -328,6 +328,37 @@
         border-color: var(--brand);
         background: var(--brand);
     }
+    .request-delete-loading[hidden] { display: none; }
+    .request-delete-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgb(15 23 42 / 55%);
+        backdrop-filter: blur(3px);
+    }
+    .request-delete-loading-card {
+        width: min(330px, 100%);
+        padding: 28px 24px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--paper);
+        box-shadow: 0 20px 60px rgb(15 23 42 / 22%);
+        text-align: center;
+    }
+    .request-delete-spinner {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 15px;
+        border: 4px solid color-mix(in srgb, var(--brand) 18%, var(--paper));
+        border-top-color: var(--brand);
+        border-radius: 50%;
+        animation: request-delete-spin .75s linear infinite;
+    }
+    @keyframes request-delete-spin { to { transform: rotate(360deg); } }
+    .request-delete-loading p { margin: 0; font-weight: 800; }
     .dashboard-delete-error {
         margin: 0 0 18px;
         padding: 13px 16px;
@@ -684,6 +715,7 @@
                                                 <form
                                                     method="POST"
                                                     action="{{ route('admin.requests.destroy', $requestItem) }}"
+                                                    data-request-delete-form
                                                 >
                                                     @csrf
                                                     @method('DELETE')
@@ -823,6 +855,13 @@
         </section>
     </div>
 
+    <div class="request-delete-loading" id="request-delete-loading" role="status" aria-live="polite" aria-busy="true" hidden>
+        <div class="request-delete-loading-card">
+            <div class="request-delete-spinner" aria-hidden="true"></div>
+            <p>Deleting request...</p>
+        </div>
+    </div>
+
     @if (session('request_deleted'))
         <div class="delete-modal" id="delete-success-modal">
             <section class="delete-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-success-title" aria-describedby="delete-success-description">
@@ -845,6 +884,7 @@
         const deleteReference = document.getElementById('delete-request-reference');
         const deleteCancel = document.getElementById('delete-cancel');
         const deleteConfirm = document.getElementById('delete-confirm');
+        const deleteLoading = document.getElementById('request-delete-loading');
         let pendingDeleteForm = null;
         const deleteSuccessModal = document.getElementById('delete-success-modal');
 
@@ -894,10 +934,23 @@
         deleteCancel.addEventListener('click', closeDeleteModal);
         deleteConfirm.addEventListener('click', () => {
             if (pendingDeleteForm) {
-                pendingDeleteForm.submit();
+                deleteConfirm.disabled = true;
+                deleteCancel.disabled = true;
+                deleteModal.hidden = true;
+                deleteLoading.hidden = false;
+                pendingDeleteForm.requestSubmit();
             } else {
                 closeDeleteModal();
             }
+        });
+        document.addEventListener('campuscare:ajax-form-error', (event) => {
+            if (!event.detail?.form?.hasAttribute('data-request-delete-form')) return;
+
+            deleteLoading.hidden = true;
+            deleteModal.hidden = false;
+            deleteConfirm.disabled = false;
+            deleteCancel.disabled = false;
+            document.getElementById('delete-dialog-description').textContent = 'The request could not be deleted. Please try again.';
         });
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && !deleteModal.hidden) {
