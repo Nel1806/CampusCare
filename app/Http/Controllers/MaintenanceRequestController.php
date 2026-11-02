@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Mail\MaintenanceRequestReceived;
 use App\Models\MaintenanceRequest;
+use App\Services\BrevoMailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MaintenanceRequestController extends Controller
@@ -13,7 +15,9 @@ class MaintenanceRequestController extends Controller
     public function create()
     {
         $trackedRequest = session('tracked_request_id')
-            ? MaintenanceRequest::query()->select(['reference', 'building', 'room', 'status'])->find(session('tracked_request_id'))
+            ? MaintenanceRequest::query()
+                ->select(['reference', 'building', 'room', 'status'])
+                ->find(session('tracked_request_id'))
             : null;
 
         return view('requests.create', [
@@ -29,7 +33,15 @@ class MaintenanceRequestController extends Controller
         ]);
 
         $trackedRequest = MaintenanceRequest::query()
-            ->select(['id', 'reference', 'building', 'room', 'status', 'created_at', 'updated_at'])
+            ->select([
+                'id',
+                'reference',
+                'building',
+                'room',
+                'status',
+                'created_at',
+                'updated_at'
+            ])
             ->where('reference', strtoupper(trim($data['reference'])))
             ->first();
 
@@ -53,8 +65,10 @@ class MaintenanceRequestController extends Controller
         $photoPath = $request->hasFile('photo')
             ? $request->file('photo')->store('maintenance-photos', 'public')
             : null;
+
         do {
-            $reference = 'CC-'.now()->format('ymd').'-'.strtoupper(Str::random(5));
+            $reference = 'CC-' . now()->format('ymd') . '-'
+                . strtoupper(Str::random(5));
         } while (MaintenanceRequest::where('reference', $reference)->exists());
 
         $maintenanceRequest = MaintenanceRequest::create([
@@ -68,12 +82,42 @@ class MaintenanceRequestController extends Controller
         ]);
 
         try {
-            Mail::to($maintenanceRequest->requester_email)->send(new MaintenanceRequestReceived($maintenanceRequest));
-            $maintenanceRequest->updateQuietly(['confirmation_email_sent_at' => now()]);
+            if (app()->environment('production')) {
+
+                // Railway: Send through Brevo HTTPS API
+                $html = view(
+                    'emails.maintenance-request-received',
+                    ['maintenanceRequest' => $maintenanceRequest]
+                )->render();
+
+                app(BrevoMailService::class)->send(
+                    $maintenanceRequest->requester_email,
+                    $maintenanceRequest->requester_name,
+                    "CampusCare request received: {$maintenanceRequest->reference}",
+                    $html
+                );
+
+            } else {
+
+                // Local XAMPP: Continue using Brevo SMTP
+                Mail::to($maintenanceRequest->requester_email)
+                    ->send(new MaintenanceRequestReceived($maintenanceRequest));
+            }
+
+            $maintenanceRequest->updateQuietly([
+                'confirmation_email_sent_at' => now(),
+            ]);
+
         } catch (\Throwable $exception) {
-            report($exception);
+
+            Log::error('CampusCare confirmation email failed.', [
+                'request_reference' => $maintenanceRequest->reference,
+                'recipient' => $maintenanceRequest->requester_email,
+                'error' => $exception->getMessage(),
+            ]);
         }
 
-        return redirect()->route('request.create')->with('success', $reference);
+        return redirect()->route('request.create')
+            ->with('success', $reference);
     }
 }

@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Mail\MaintenanceRequestResolved;
 use App\Models\MaintenancePersonnel;
 use App\Models\MaintenanceRequest;
+use App\Services\BrevoMailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class AdminRequestController extends Controller
@@ -42,29 +44,66 @@ class AdminRequestController extends Controller
         return view('admin.show', ['requestItem' => $maintenanceRequest->load('assignee'), 'personnel' => MaintenancePersonnel::where('employment_status', 'active')->orderBy('name')->get()]);
     }
 
-    public function update(Request $request, MaintenanceRequest $maintenanceRequest)
-    {
-        $wasResolved = $maintenanceRequest->status === 'resolved';
-        $data = $request->validate([
-            'maintenance_personnel_id' => ['nullable', 'exists:maintenance_personnel,id'],
-            'status' => ['required', 'in:new,assigned,in_progress,resolved'],
-        ]);
-        if (! empty($data['maintenance_personnel_id']) && $data['status'] === 'new') {
-            $data['status'] = 'assigned';
-        }
-        $maintenanceRequest->update($data);
+    
+public function update(Request $request, MaintenanceRequest $maintenanceRequest)
+{
+    $wasResolved = $maintenanceRequest->status === 'resolved';
 
-        if (! $wasResolved && $maintenanceRequest->status === 'resolved' && $maintenanceRequest->requester_email && ! $maintenanceRequest->resolved_email_sent_at) {
-            try {
-                Mail::to($maintenanceRequest->requester_email)->send(new MaintenanceRequestResolved($maintenanceRequest));
-                $maintenanceRequest->updateQuietly(['resolved_email_sent_at' => now()]);
-            } catch (\Throwable $exception) {
-                report($exception);
-            }
-        }
+    $data = $request->validate([
+        'maintenance_personnel_id' => ['nullable', 'exists:maintenance_personnel,id'],
+        'status' => ['required', 'in:new,assigned,in_progress,resolved'],
+    ]);
 
-        return back()->with('success', 'Request updated successfully.');
+    if (!empty($data['maintenance_personnel_id']) && $data['status'] === 'new') {
+        $data['status'] = 'assigned';
     }
+
+    $maintenanceRequest->update($data);
+
+    if (
+        !$wasResolved &&
+        $maintenanceRequest->status === 'resolved' &&
+        $maintenanceRequest->requester_email &&
+        !$maintenanceRequest->resolved_email_sent_at
+    ) {
+        try {
+            if (app()->environment('production')) {
+
+                // Railway: Brevo HTTPS API
+                $html = view('emails.maintenance-request-resolved', [
+                    'maintenanceRequest' => $maintenanceRequest,
+                ])->render();
+
+                app(BrevoMailService::class)->send(
+                    $maintenanceRequest->requester_email,
+                    $maintenanceRequest->requester_name,
+                    "CampusCare request resolved: {$maintenanceRequest->reference}",
+                    $html
+                );
+
+            } else {
+
+                // Local XAMPP: Brevo SMTP
+                Mail::to($maintenanceRequest->requester_email)
+                    ->send(new MaintenanceRequestResolved($maintenanceRequest));
+            }
+
+            $maintenanceRequest->updateQuietly([
+                'resolved_email_sent_at' => now(),
+            ]);
+
+        } catch (\Throwable $exception) {
+            Log::error('CampusCare resolved email failed.', [
+                'request_reference' => $maintenanceRequest->reference,
+                'recipient' => $maintenanceRequest->requester_email,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+    }
+
+    return back()->with('success', 'Request updated successfully.');
+}
+
 
     public function destroy(MaintenanceRequest $maintenanceRequest)
     {
