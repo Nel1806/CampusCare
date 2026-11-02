@@ -18,7 +18,8 @@ Route::domain('campuscare.buzz')->group(function () {
     Route::get('/', [MaintenanceRequestController::class, 'create'])
         ->name('request.create');
 
-    Route::get('/user', [MaintenanceRequestController::class, 'create']);
+    Route::get('/user', [MaintenanceRequestController::class, 'create'])
+        ->name('request.user');
 
     Route::post('/requests', [MaintenanceRequestController::class, 'store'])
         ->name('request.store');
@@ -56,97 +57,111 @@ Route::domain('admin.campuscare.buzz')->group(function () {
         ->middleware(['auth', 'admin'])
         ->name('admin.logout');
 
-    Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-        Route::get('/dashboard', [AdminRequestController::class, 'index'])
-            ->name('dashboard');
+    Route::middleware(['auth', 'admin'])
+        ->prefix('admin')
+        ->name('admin.')
+        ->group(function () {
+            Route::get('/dashboard', [AdminRequestController::class, 'index'])
+                ->name('dashboard');
 
-        Route::get('/personnel', [PersonnelController::class, 'index'])
-            ->name('personnel.index');
+            Route::get('/personnel', [PersonnelController::class, 'index'])
+                ->name('personnel.index');
 
-        Route::get('/personnel/create', [PersonnelController::class, 'create'])
-            ->name('personnel.create');
+            Route::get('/personnel/create', [PersonnelController::class, 'create'])
+                ->name('personnel.create');
 
-        Route::post('/personnel', [PersonnelController::class, 'store'])
-            ->name('personnel.store');
+            Route::post('/personnel', [PersonnelController::class, 'store'])
+                ->name('personnel.store');
 
-        Route::get('/personnel/{personnel}/edit', [PersonnelController::class, 'edit'])
-            ->name('personnel.edit');
+            Route::get('/personnel/{personnel}/edit', [PersonnelController::class, 'edit'])
+                ->name('personnel.edit');
 
-        Route::patch('/personnel/{personnel}', [PersonnelController::class, 'update'])
-            ->name('personnel.update');
+            Route::patch('/personnel/{personnel}', [PersonnelController::class, 'update'])
+                ->name('personnel.update');
 
-        Route::patch('/personnel/{personnel}/duty', [PersonnelController::class, 'updateDuty'])
-            ->name('personnel.duty.update');
+            Route::patch('/personnel/{personnel}/duty', [PersonnelController::class, 'updateDuty'])
+                ->name('personnel.duty.update');
 
-        Route::delete('/personnel/{personnel}', [PersonnelController::class, 'destroy'])
-            ->name('personnel.destroy');
+            Route::delete('/personnel/{personnel}', [PersonnelController::class, 'destroy'])
+                ->name('personnel.destroy');
 
-        Route::get('/requests/{maintenanceRequest}', [AdminRequestController::class, 'show'])
-            ->name('requests.show');
+            Route::get('/requests/{maintenanceRequest}', [AdminRequestController::class, 'show'])
+                ->name('requests.show');
 
-        Route::patch('/requests/{maintenanceRequest}', [AdminRequestController::class, 'update'])
-            ->name('requests.update');
+            Route::patch('/requests/{maintenanceRequest}', [AdminRequestController::class, 'update'])
+                ->name('requests.update');
 
-        Route::delete('/requests/{maintenanceRequest}', [AdminRequestController::class, 'destroy'])
-            ->name('requests.destroy');
-    });
+            Route::delete('/requests/{maintenanceRequest}', [AdminRequestController::class, 'destroy'])
+                ->name('requests.destroy');
+        });
 });
 
 /*
 |--------------------------------------------------------------------------
-| Fallback for Railway's original domain
+| ORIGINAL RAILWAY DOMAIN
 |--------------------------------------------------------------------------
+| campuscare-production-331f.up.railway.app
+| Kept for compatibility. All route names are unique.
 */
 
 Route::domain('campuscare-production-331f.up.railway.app')->group(function () {
-    Route::get('/', [MaintenanceRequestController::class, 'create']);
+    Route::get('/', [MaintenanceRequestController::class, 'create'])
+        ->name('railway.home');
+
     Route::get('/user', [MaintenanceRequestController::class, 'create'])
-        ->name('request.create');
+        ->name('railway.user');
 
     Route::post('/requests', [MaintenanceRequestController::class, 'store'])
-        ->name('request.store');
+        ->name('railway.request.store');
 
     Route::post('/requests/track', [MaintenanceRequestController::class, 'track'])
-        ->name('request.track');
+        ->name('railway.request.track');
 
     Route::get('/admin/login', [AuthController::class, 'create'])
-        ->name('admin.login');
+        ->name('railway.admin.login');
 
     Route::post('/admin/login', [AuthController::class, 'store'])
-        ->name('admin.login.store');
+        ->name('railway.admin.login.store');
 
-    Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-        Route::get('/dashboard', [AdminRequestController::class, 'index'])
-            ->name('dashboard');
+    Route::post('/admin/logout', [AuthController::class, 'destroy'])
+        ->middleware(['auth', 'admin'])
+        ->name('railway.admin.logout');
 
-        Route::get('/personnel', [PersonnelController::class, 'index'])
-            ->name('personnel.index');
+    Route::middleware(['auth', 'admin'])
+        ->prefix('admin')
+        ->name('railway.admin.')
+        ->group(function () {
+            Route::get('/dashboard', [AdminRequestController::class, 'index'])
+                ->name('dashboard');
 
-        Route::get('/personnel/create', [PersonnelController::class, 'create'])
-            ->name('personnel.create');
+            Route::get('/personnel', [PersonnelController::class, 'index'])
+                ->name('personnel.index');
 
-        Route::post('/personnel', [PersonnelController::class, 'store'])
-            ->name('personnel.store');
+            Route::get('/personnel/create', [PersonnelController::class, 'create'])
+                ->name('personnel.create');
 
-        Route::get('/personnel/{personnel}/edit', [PersonnelController::class, 'edit'])
-            ->name('personnel.edit');
+            Route::post('/personnel', [PersonnelController::class, 'store'])
+                ->name('personnel.store');
 
-        Route::patch('/personnel/{personnel}', [PersonnelController::class, 'update'])
-            ->name('personnel.update');
+            Route::get('/personnel/{personnel}/edit', [PersonnelController::class, 'edit'])
+                ->name('personnel.edit');
 
-        Route::patch('/personnel/{personnel}/duty', [PersonnelController::class, 'updateDuty'])
-            ->name('personnel.duty.update');
+            Route::patch('/personnel/{personnel}', [PersonnelController::class, 'update'])
+                ->name('personnel.update');
 
-        Route::delete('/personnel/{personnel}', [PersonnelController::class, 'destroy'])
-            ->name('personnel.destroy');
+            Route::patch('/personnel/{personnel}/duty', [PersonnelController::class, 'updateDuty'])
+                ->name('personnel.duty.update');
 
-        Route::get('/requests/{maintenanceRequest}', [AdminRequestController::class, 'show'])
-            ->name('requests.show');
+            Route::delete('/personnel/{personnel}', [PersonnelController::class, 'destroy'])
+                ->name('personnel.destroy');
 
-        Route::patch('/requests/{maintenanceRequest}', [AdminRequestController::class, 'update'])
-            ->name('requests.update');
+            Route::get('/requests/{maintenanceRequest}', [AdminRequestController::class, 'show'])
+                ->name('requests.show');
 
-        Route::delete('/requests/{maintenanceRequest}', [AdminRequestController::class, 'destroy'])
-            ->name('requests.destroy');
-    });
+            Route::patch('/requests/{maintenanceRequest}', [AdminRequestController::class, 'update'])
+                ->name('requests.update');
+
+            Route::delete('/requests/{maintenanceRequest}', [AdminRequestController::class, 'destroy'])
+                ->name('requests.destroy');
+        });
 });
